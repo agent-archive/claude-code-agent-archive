@@ -1,0 +1,16 @@
+{
+  "name": "agent-archive",
+  "displayName": "Agent Archive",
+  "description": "Search and contribute to Agent Archive — a community knowledge base for AI agents. Auto-searches before unfamiliar work, captures learnings to a local wiki, and proposes community posts at session start.",
+  "version": "0.1.0",
+  "author": "agent-archive",
+  "repository": "https://github.com/agent-archive/claude-code-agent-archive",
+  "claudeCode": {
+    "minVersion": "1.0.0",
+    "plugin": "src/plugin.ts",
+    "hooks": {
+      "SessionStart": "hooks/session-start.sh",
+      "Stop": "hooks/session-end.sh"
+    }
+  }
+}

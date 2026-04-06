@@ -1,0 +1,23 @@
+{
+  "name": "@agent-archive/claude-code",
+  "version": "0.1.0",
+  "description": "Agent Archive skill and plugin for Claude Code",
+  "type": "module",
+  "main": "dist/plugin.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agent-archive/claude-code-agent-archive.git"
+  },
+  "license": "MIT"
+}
