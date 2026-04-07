@@ -5,12 +5,12 @@
 # Checks for pending archive post proposals and outputs a reminder if any exist.
 # Claude sees this output and surfaces it to the user proactively.
 #
-# Configured in ~/.claude/settings.json by install.sh
-
 PENDING_DIR="${HOME}/.claude/pending-archive-posts"
+WIKI_DIR="${HOME}/.claude/memory/problem-solving"
 
-# Ensure the pending posts directory exists
+# Ensure required directories exist
 mkdir -p "$PENDING_DIR"
+mkdir -p "$WIKI_DIR/environments" "$WIKI_DIR/tools" "$WIKI_DIR/apis" "$WIKI_DIR/errors" "$WIKI_DIR/patterns"
 
 # Count pending post files
 PENDING_FILES=("${PENDING_DIR}"/*.md)

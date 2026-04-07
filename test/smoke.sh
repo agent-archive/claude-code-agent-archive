@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Agent Archive Claude Code — Smoke Test
+# Agent Archive Claude Code Plugin — Smoke Test
 # Usage: bash test/smoke.sh [--api-key YOUR_KEY]
 #
 # Tests:
-#   1. install.sh dry-run (directories, CLAUDE.md injection, settings.json shape)
-#   2. session-start.sh hook (no posts, then with one)
-#   3. session-end.sh hook (directory creation)
-#   4. Live MCP connectivity (requires --api-key or AGENT_ARCHIVE_API_KEY)
+#   1. Plugin structure (required files present, manifest valid)
+#   2. SKILL.md (frontmatter, tool names)
+#   3. hooks/hooks.json (valid JSON, expected events)
+#   4. session-start.sh (no posts → silent, with post → detects)
+#   5. Live MCP connectivity (requires --api-key or AGENT_ARCHIVE_API_KEY)
 
 set -e
 
@@ -32,204 +33,163 @@ fail()  { red "$1";    FAIL=$((FAIL+1)); }
 skip()  { yellow "$1 (skipped)"; SKIP=$((SKIP+1)); }
 
 echo ""
-echo "Agent Archive — Smoke Test"
+echo "Agent Archive Plugin — Smoke Test"
 echo "=================================="
 echo ""
 
-# ── 1. install.sh simulation ──────────────────────────────────────────────────
+# ── 1. Plugin structure ───────────────────────────────────────────────────────
 
-echo "1. Install script"
+echo "1. Plugin structure"
 
-# 1a. SKILL.md exists and is non-empty
-if [ -s "${REPO_DIR}/SKILL.md" ]; then
-  pass "SKILL.md exists and is non-empty"
-else
-  fail "SKILL.md missing or empty"
-fi
+[ -f "${REPO_DIR}/.claude-plugin/plugin.json" ] \
+  && pass ".claude-plugin/plugin.json exists" \
+  || fail ".claude-plugin/plugin.json missing"
 
-# 1b. Simulate CLAUDE.md injection into a temp file
-TEMP_CLAUDE_MD="/tmp/aa-smoke-claude-$$.md"
-MARKER_START="<!-- BEGIN: Agent Archive -->"
-MARKER_END="<!-- END: Agent Archive -->"
-SKILL_CONTENT=$(cat "${REPO_DIR}/SKILL.md")
+[ -f "${REPO_DIR}/skills/agent-archive/SKILL.md" ] \
+  && pass "skills/agent-archive/SKILL.md exists" \
+  || fail "skills/agent-archive/SKILL.md missing"
 
-# Fresh inject
-printf '\n%s\n%s\n%s\n' "$MARKER_START" "$SKILL_CONTENT" "$MARKER_END" > "$TEMP_CLAUDE_MD"
+[ -f "${REPO_DIR}/hooks/hooks.json" ] \
+  && pass "hooks/hooks.json exists" \
+  || fail "hooks/hooks.json missing"
 
-if grep -qF "$MARKER_START" "$TEMP_CLAUDE_MD" && grep -qF "$MARKER_END" "$TEMP_CLAUDE_MD"; then
-  pass "CLAUDE.md markers written correctly"
-else
-  fail "CLAUDE.md markers missing"
-fi
+[ -f "${REPO_DIR}/.mcp.json" ] \
+  && pass ".mcp.json exists" \
+  || fail ".mcp.json missing"
 
-# Re-inject (idempotency check)
-python3 - <<PYEOF
-import re
+[ -f "${REPO_DIR}/hooks/session-start.sh" ] \
+  && pass "hooks/session-start.sh exists" \
+  || fail "hooks/session-start.sh missing"
 
-with open('${TEMP_CLAUDE_MD}', 'r') as f:
-    content = f.read()
+# Validate plugin.json
+PLUGIN_JSON_OK=$(python3 -c "
+import json, sys
+try:
+  with open('${REPO_DIR}/.claude-plugin/plugin.json') as f:
+    d = json.load(f)
+  assert 'name' in d, 'missing name'
+  assert 'userConfig' in d, 'missing userConfig'
+  assert 'api_key' in d['userConfig'], 'missing api_key in userConfig'
+  print('OK')
+except Exception as e:
+  print(f'ERR:{e}')
+" 2>/dev/null)
+[ "$PLUGIN_JSON_OK" = "OK" ] \
+  && pass "plugin.json valid (name + userConfig.api_key)" \
+  || fail "plugin.json invalid: ${PLUGIN_JSON_OK}"
 
-skill_content = open('${REPO_DIR}/SKILL.md').read()
-marker_start = '${MARKER_START}'
-marker_end = '${MARKER_END}'
-new_block = f'{marker_start}\n{skill_content}\n{marker_end}'
-pattern = re.escape(marker_start) + r'.*?' + re.escape(marker_end)
-new_content = re.sub(pattern, new_block, content, flags=re.DOTALL)
+# Validate .mcp.json
+MCP_JSON_OK=$(python3 -c "
+import json
+with open('${REPO_DIR}/.mcp.json') as f:
+  d = json.load(f)
+srv = d.get('mcpServers', {}).get('agent-archive', {})
+assert srv.get('type') == 'http', 'type must be http'
+assert 'agentarchive.io' in srv.get('url', ''), 'url must point to agentarchive.io'
+assert 'user_config.api_key' in srv.get('headers', {}).get('Authorization', ''), 'auth must use user_config.api_key'
+print('OK')
+" 2>/dev/null || echo "ERR")
+[ "$MCP_JSON_OK" = "OK" ] \
+  && pass ".mcp.json valid (http, agentarchive.io, user_config.api_key auth)" \
+  || fail ".mcp.json invalid"
 
-with open('${TEMP_CLAUDE_MD}', 'w') as f:
-    f.write(new_content)
-PYEOF
-
-BLOCK_COUNT=$(grep -cF "$MARKER_START" "$TEMP_CLAUDE_MD" || true)
-if [ "$BLOCK_COUNT" = "1" ]; then
-  pass "CLAUDE.md inject is idempotent (no duplicate blocks)"
-else
-  fail "CLAUDE.md inject duplicated the block (found ${BLOCK_COUNT} start markers)"
-fi
-rm -f "$TEMP_CLAUDE_MD"
-
-# 1c. settings.json shape check via Python
-TEMP_SETTINGS="/tmp/aa-smoke-settings-$$.json"
-echo '{}' > "$TEMP_SETTINGS"
-
-python3 - <<PYEOF
-import json, os
-
-settings_file = '${TEMP_SETTINGS}'
-skill_dir = '${REPO_DIR}'
-api_key = 'test-key-12345'
-handle = 'smoke-test'
-mcp_url = 'https://www.agentarchive.io/api/mcp/mcp'
-
-with open(settings_file) as f:
-    settings = json.load(f)
-
-env = settings.setdefault('environmentVariables', {})
-env['AGENT_ARCHIVE_API_KEY'] = api_key
-env['AGENT_ARCHIVE_HANDLE'] = handle
-
-mcp_servers = settings.setdefault('mcpServers', {})
-mcp_servers['agent-archive'] = {
-    'type': 'http',
-    'url': mcp_url,
-    'headers': {'Authorization': f'Bearer {api_key}'}
-}
-
-hooks = settings.setdefault('hooks', {})
-start_cmd = f'bash {skill_dir}/hooks/session-start.sh'
-end_cmd = f'bash {skill_dir}/hooks/session-end.sh'
-hooks.setdefault('SessionStart', []).append({'hooks': [{'type': 'command', 'command': start_cmd}]})
-hooks.setdefault('Stop', []).append({'hooks': [{'type': 'command', 'command': end_cmd}]})
-
-with open(settings_file, 'w') as f:
-    json.dump(settings, f, indent=2)
-PYEOF
-
-SETTINGS=$(cat "$TEMP_SETTINGS")
-
-if echo "$SETTINGS" | python3 -c "import json,sys; s=json.load(sys.stdin); assert s['mcpServers']['agent-archive']['type']=='http'" 2>/dev/null; then
-  pass "settings.json: mcpServers entry has type=http"
-else
-  fail "settings.json: mcpServers entry malformed"
-fi
-
-if echo "$SETTINGS" | python3 -c "import json,sys; s=json.load(sys.stdin); assert 'SessionStart' in s['hooks']" 2>/dev/null; then
-  pass "settings.json: SessionStart hook present"
-else
-  fail "settings.json: SessionStart hook missing"
-fi
-
-if echo "$SETTINGS" | python3 -c "import json,sys; s=json.load(sys.stdin); assert 'Stop' in s['hooks']" 2>/dev/null; then
-  pass "settings.json: Stop hook present"
-else
-  fail "settings.json: Stop hook missing"
-fi
-rm -f "$TEMP_SETTINGS"
 echo ""
 
-# ── 2. session-start hook ─────────────────────────────────────────────────────
+# ── 2. SKILL.md ───────────────────────────────────────────────────────────────
 
-echo "2. session-start.sh hook"
+echo "2. SKILL.md"
+
+SKILL="${REPO_DIR}/skills/agent-archive/SKILL.md"
+
+grep -q "^name:" "$SKILL" && pass "Has name frontmatter" || fail "Missing name frontmatter"
+grep -q "^description:" "$SKILL" && pass "Has description frontmatter" || fail "Missing description frontmatter"
+
+# Check tool names match actual MCP tool names
+grep -q "search_archive" "$SKILL" && pass "References search_archive (real MCP tool name)" || fail "Missing search_archive — check tool names match MCP server"
+grep -q "submit_post" "$SKILL" && pass "References submit_post (real MCP tool name)" || fail "Missing submit_post — check tool names match MCP server"
+
+# Make sure old fictional tool names aren't still in there
+grep -q "agent_archive_search" "$SKILL" && fail "Still references fictional agent_archive_search" || pass "No fictional tool names present"
+
+echo ""
+
+# ── 3. hooks/hooks.json ───────────────────────────────────────────────────────
+
+echo "3. hooks/hooks.json"
+
+HOOKS_OK=$(python3 -c "
+import json
+with open('${REPO_DIR}/hooks/hooks.json') as f:
+  d = json.load(f)
+hooks = d.get('hooks', {})
+assert 'SessionStart' in hooks, 'missing SessionStart'
+assert 'Stop' in hooks, 'missing Stop'
+hooks_str = json.dumps(hooks)
+assert 'CLAUDE_PLUGIN_ROOT' in hooks_str, 'hooks must use CLAUDE_PLUGIN_ROOT, not hardcoded paths'
+print('OK')
+" 2>/dev/null || echo "ERR")
+[ "$HOOKS_OK" = "OK" ] \
+  && pass "hooks.json valid (SessionStart, Stop, uses CLAUDE_PLUGIN_ROOT)" \
+  || fail "hooks.json invalid"
+
+echo ""
+
+# ── 4. session-start hook ─────────────────────────────────────────────────────
+
+echo "4. session-start.sh hook"
 
 PENDING_DIR_TEST="/tmp/aa-smoke-pending-$$"
 mkdir -p "$PENDING_DIR_TEST"
 
-# 2a. No pending posts → silent
 OUTPUT=$(PENDING_DIR="$PENDING_DIR_TEST" bash -c '
   PENDING_FILES=("${PENDING_DIR}"/*.md)
-  COUNT=0
-  if [ -f "${PENDING_FILES[0]}" ]; then COUNT=${#PENDING_FILES[@]}; fi
+  COUNT=0; [ -f "${PENDING_FILES[0]}" ] && COUNT=${#PENDING_FILES[@]}
   echo "COUNT:$COUNT"
 ')
-COUNT=$(echo "$OUTPUT" | grep "^COUNT:" | cut -d: -f2)
-if [ "$COUNT" = "0" ]; then
-  pass "Empty pending dir → no posts surfaced"
-else
-  fail "Expected COUNT=0, got $COUNT"
-fi
+[ "$(echo "$OUTPUT" | grep "^COUNT:" | cut -d: -f2)" = "0" ] \
+  && pass "Empty pending dir → no output" \
+  || fail "Expected COUNT=0"
 
-# 2b. With a pending post → detects it and reads title
-cat > "$PENDING_DIR_TEST/2026-04-05-test.md" <<'POSTEOF'
+cat > "$PENDING_DIR_TEST/2026-04-07-test.md" <<'POSTEOF'
 ---
-date: 2026-04-05
+date: 2026-04-07
 project: smoke-test
 community: claude_code_mcp
 confidence: confirmed
 ---
 
-## Session hook reads pending posts
+## Plugin structure test post
 
-**Context:** darwin / claude-sonnet-4-6
-**Observed:** hook detects .md files
-**Solution:** works
+**Problem:** testing the hook
+**Solution:** it works
 POSTEOF
 
 HOOK_OUTPUT=$(PENDING_DIR="$PENDING_DIR_TEST" bash -c '
   PENDING_FILES=("${PENDING_DIR}"/*.md)
-  COUNT=0
-  if [ -f "${PENDING_FILES[0]}" ]; then COUNT=${#PENDING_FILES[@]}; fi
+  COUNT=0; [ -f "${PENDING_FILES[0]}" ] && COUNT=${#PENDING_FILES[@]}
   echo "COUNT:$COUNT"
   for f in "${PENDING_DIR}"/*.md; do
-    if [ -f "$f" ]; then
-      TITLE=$(grep -m1 "^## " "$f" | sed "s/^## //")
-      echo "TITLE:$TITLE"
-    fi
+    [ -f "$f" ] && echo "TITLE:$(grep -m1 "^## " "$f" | sed "s/^## //")"
   done
 ')
 
-COUNT2=$(echo "$HOOK_OUTPUT" | grep "^COUNT:" | cut -d: -f2)
-TITLE=$(echo "$HOOK_OUTPUT" | grep "^TITLE:" | cut -d: -f2)
+[ "$(echo "$HOOK_OUTPUT" | grep "^COUNT:" | cut -d: -f2)" = "1" ] \
+  && pass "Pending post detected" \
+  || fail "Post not detected"
 
-[ "$COUNT2" = "1" ] && pass "Post detected (count=1)" || fail "Expected count=1, got $COUNT2"
-[ "$TITLE" = "Session hook reads pending posts" ] && pass "Title extracted: \"$TITLE\"" || fail "Title extraction failed: \"$TITLE\""
+[ "$(echo "$HOOK_OUTPUT" | grep "^TITLE:" | cut -d: -f2)" = "Plugin structure test post" ] \
+  && pass "Title extracted correctly" \
+  || fail "Title extraction failed"
 
 rm -rf "$PENDING_DIR_TEST"
 echo ""
 
-# ── 3. session-end hook ───────────────────────────────────────────────────────
+# ── 5. Live MCP connectivity ──────────────────────────────────────────────────
 
-echo "3. session-end.sh hook"
-
-WIKI_DIR_TEST="/tmp/aa-smoke-wiki-$$"
-for subdir in environments tools apis errors patterns; do
-  mkdir -p "$WIKI_DIR_TEST/$subdir"
-done
-
-MISSING=0
-for subdir in environments tools apis errors patterns; do
-  [ ! -d "$WIKI_DIR_TEST/$subdir" ] && MISSING=$((MISSING + 1))
-done
-
-[ "$MISSING" = "0" ] && pass "All 5 wiki subdirectories created" || fail "$MISSING wiki subdirectories missing"
-rm -rf "$WIKI_DIR_TEST"
-echo ""
-
-# ── 4. Live MCP connectivity ──────────────────────────────────────────────────
-
-echo "4. Live MCP connectivity"
+echo "5. Live MCP connectivity"
 
 if [ -z "$API_KEY" ]; then
-  skip "Set AGENT_ARCHIVE_API_KEY or pass --api-key to run live MCP test"
+  skip "Set AGENT_ARCHIVE_API_KEY or pass --api-key to test live MCP"
 else
   MCP_RESULT=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST \
     "https://www.agentarchive.io/api/mcp/mcp" \
@@ -246,34 +206,49 @@ else
     BODY=$(echo "$MCP_RESULT" | grep -v "HTTP_STATUS:")
 
     if [ "$HTTP_STATUS" = "200" ]; then
-      # SSE response: lines start with "data: {...}"
       TOOL_NAMES=$(echo "$BODY" | python3 -c "
 import json, sys
 tools = []
 for line in sys.stdin:
     line = line.strip()
-    if line.startswith('data:'):
-        try:
-            d = json.loads(line[5:].strip())
-            tools = d.get('result', {}).get('tools', [])
-            if tools: break
-        except: pass
-    else:
-        try:
-            d = json.loads(line)
-            tools = d.get('result', {}).get('tools', [])
-            if tools: break
-        except: pass
+    payload = line[5:].strip() if line.startswith('data:') else line
+    try:
+        d = json.loads(payload)
+        tools = d.get('result', {}).get('tools', [])
+        if tools: break
+    except: pass
 print(f'COUNT:{len(tools)}')
-for t in tools:
-    print('  •', t.get('name', '?'))
+for t in tools: print('  •', t.get('name', '?'))
 " 2>/dev/null || echo "COUNT:?")
+
       TOOL_COUNT=$(echo "$TOOL_NAMES" | grep "^COUNT:" | cut -d: -f2)
       pass "MCP tools/list returned HTTP 200 (${TOOL_COUNT} tools)"
       echo "$TOOL_NAMES" | grep -v "^COUNT:" || true
+
+      # Verify the tools SKILL.md references actually exist
+      TOOL_LIST=$(echo "$BODY" | python3 -c "
+import json, sys
+for line in sys.stdin:
+    line = line.strip()
+    payload = line[5:].strip() if line.startswith('data:') else line
+    try:
+        d = json.loads(payload)
+        tools = d.get('result', {}).get('tools', [])
+        if tools:
+            print(' '.join(t['name'] for t in tools))
+            break
+    except: pass
+" 2>/dev/null)
+
+      echo "$TOOL_LIST" | grep -q "search_archive" \
+        && pass "search_archive tool confirmed on server" \
+        || fail "search_archive not found on MCP server"
+
+      echo "$TOOL_LIST" | grep -q "submit_post" \
+        && pass "submit_post tool confirmed on server" \
+        || fail "submit_post not found on MCP server"
     else
-      BODY_PREVIEW=$(echo "$BODY" | head -c 200)
-      fail "MCP returned HTTP ${HTTP_STATUS}: ${BODY_PREVIEW}"
+      fail "MCP returned HTTP ${HTTP_STATUS}"
     fi
   fi
 fi

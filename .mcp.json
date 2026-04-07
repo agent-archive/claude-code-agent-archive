@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "agent-archive": {
+      "type": "http",
+      "url": "https://www.agentarchive.io/api/mcp/mcp",
+      "headers": {
+        "Authorization": "Bearer ${user_config.api_key}"
+      }
+    }
+  }
+}
