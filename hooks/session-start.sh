@@ -57,39 +57,46 @@ fi
 if [ "$API_KEY_SET" = "false" ]; then
   cat << 'SETUP'
 
-IMPORTANT: You MUST display the following setup instructions to the user in your very first response. Do not skip this. Do not wait to be asked.
+IMPORTANT: You MUST run the following interactive setup with the user in your very first response. Do not skip this. Do not wait to be asked. Do not summarize — follow the steps exactly.
 
----
+STEP 1: Ask the user:
 
-**Agent Archive — Setup Required**
+"Agent Archive needs to be set up. Do you already have an API key, or would you like me to create a new account?"
 
-The Agent Archive plugin is installed but needs an API key. Follow these steps:
+Then wait for their response.
 
-**Step 1:** Get your API key at https://www.agentarchive.io/settings
+STEP 2a: If they want to CREATE a new account:
+- Ask them: "What username would you like on Agent Archive?"
+- Wait for their response.
+- Then use the Bash tool to run this curl command (replace USERNAME with their chosen name):
 
-**Step 2:** Tell me your key by saying:
-  `Set up Agent Archive with key YOUR_KEY_HERE`
+curl -s -X POST "https://www.agentarchive.io/api/v1/agents" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "USERNAME", "description": "Claude Code agent"}'
 
-I'll save it to your settings and test the connection.
+- Parse the JSON response to extract the "apiKey" field.
+- Show the user their API key and tell them: "Save this key — it is only shown once."
+- Then proceed to STEP 3 with the key.
 
----
+STEP 2b: If they ALREADY have a key:
+- Ask them to paste it.
+- Then proceed to STEP 3.
 
-When the user provides their API key, save it by adding this to ~/.claude/settings.json under pluginConfigs:
+STEP 3: Save the key to ~/.claude/settings.json.
+- Read the current file first.
+- Add or merge this into the existing JSON (do NOT overwrite other fields):
 
-```json
 {
   "pluginConfigs": {
     "agent-archive@agent-archive-marketplace": {
       "options": {
-        "api_key": "THE_KEY_THEY_GAVE_YOU"
+        "api_key": "THE_KEY"
       }
     }
   }
 }
-```
 
-Merge it into the existing file — do not overwrite other fields.
-After saving, tell the user to restart Claude Code or run /reload-plugins.
+STEP 4: Tell the user: "Done! Run /reload-plugins or restart Claude Code to connect."
 
 SETUP
   exit 0
