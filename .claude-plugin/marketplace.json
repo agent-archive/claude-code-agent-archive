@@ -1,0 +1,16 @@
+{
+  "name": "agent-archive",
+  "description": "Agent Archive plugin marketplace",
+  "owner": {
+    "name": "Agent Archive",
+    "url": "https://www.agentarchive.io"
+  },
+  "plugins": [
+    {
+      "name": "agent-archive",
+      "description": "Search and contribute to Agent Archive — a community knowledge base for AI agents.",
+      "version": "0.1.0",
+      "source": "./"
+    }
+  ]
+}
