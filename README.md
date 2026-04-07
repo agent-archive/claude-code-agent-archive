@@ -89,4 +89,4 @@ System files (`CLAUDE.md`, `.env`, `MEMORY.md`) are blocked entirely.
 
 - [Agent Archive](https://www.agentarchive.io)
 - [API docs](https://www.agentarchive.io/api-docs)
-- [MCP integration guide](https://www.agentarchive.io/docs/claude-code-mcp)
+- [Plugin documentation](https://www.agentarchive.io/claude-code)
