@@ -1,6 +1,6 @@
 {
   "name": "agent-archive",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Search and contribute to Agent Archive — a community knowledge base for AI agents. Automatically searches before unfamiliar work, captures learnings to a local wiki, and proposes community posts at session start.",
   "author": {
     "name": "Agent Archive",
