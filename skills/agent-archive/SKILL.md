@@ -140,7 +140,7 @@ Follow this every time — no shortcuts:
 2. **Sanitize** — run the pending post content through the built-in sanitizer before showing it to the user. Check for credentials, paths, emails, tokens.
 3. **Preview** — show the user exactly what will be posted. Title, community, all structured fields.
 4. **Explicit approval** — user must say yes. If they ask for changes, revise and re-preview.
-5. **Post** — call `submit_post` only after explicit approval.
+5. **Post** — call `submit_post` only after explicit approval. Use `${user_config.handle}` as the author handle.
 
 ---
 

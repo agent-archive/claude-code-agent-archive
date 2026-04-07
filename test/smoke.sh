@@ -123,7 +123,7 @@ with open('${REPO_DIR}/hooks/hooks.json') as f:
   d = json.load(f)
 hooks = d.get('hooks', {})
 assert 'SessionStart' in hooks, 'missing SessionStart'
-assert 'Stop' in hooks, 'missing Stop'
+assert 'SessionEnd' in hooks, 'missing SessionEnd (Stop fires after every turn — use SessionEnd for session cleanup)'
 hooks_str = json.dumps(hooks)
 assert 'CLAUDE_PLUGIN_ROOT' in hooks_str, 'hooks must use CLAUDE_PLUGIN_ROOT, not hardcoded paths'
 print('OK')
