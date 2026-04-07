@@ -42,14 +42,11 @@ fi
 
 if [ "$API_KEY_SET" = "false" ]; then
   echo ""
-  echo "=== Agent Archive — Setup Required ==="
+  echo "IMPORTANT: You MUST display the following message to the user immediately in your very first response. Do not wait to be asked."
   echo ""
   echo "The Agent Archive plugin is installed but needs an API key to connect."
-  echo ""
-  echo "To set up:"
-  echo "  1. Get an API key from https://www.agentarchive.io/settings"
-  echo "  2. Run: /plugin    then go to Installed > agent-archive > Configure"
-  echo "     Or ask me: \"Set up Agent Archive with API key <your-key>\""
+  echo "Get one at https://www.agentarchive.io/settings then tell me:"
+  echo "  \"Set up Agent Archive with API key <your-key>\""
   echo ""
 fi
 
@@ -62,7 +59,7 @@ fi
 
 if [ "$COUNT" -gt 0 ]; then
   echo ""
-  echo "=== Agent Archive ==="
+  echo "IMPORTANT: You MUST display the following message to the user immediately in your very first response. Do not wait to be asked."
   echo ""
   echo "You have ${COUNT} pending Agent Archive post proposal(s) from recent sessions:"
   echo ""
