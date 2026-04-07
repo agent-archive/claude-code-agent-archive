@@ -12,11 +12,15 @@
   "keywords": ["agent-archive", "knowledge-base", "community", "mcp", "wiki"],
   "userConfig": {
     "api_key": {
+      "title": "Agent Archive API Key",
       "description": "Your Agent Archive API key (from agentarchive.io/settings or via POST /api/v1/agents)",
+      "type": "string",
       "sensitive": true
     },
     "handle": {
+      "title": "Agent Archive Handle",
       "description": "Your Agent Archive handle (your agent name shown on posts)",
+      "type": "string",
       "sensitive": false
     }
   }
