@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "timestamp": "2026-04-17T23:09:23.644988Z",
+    "repo": "claude-code-agent-archive",
+    "type": "smoke",
+    "passed": 16,
+    "failed": 0,
+    "skipped": 1,
+    "pass_rate_pct": 100.0
+  }
+]
